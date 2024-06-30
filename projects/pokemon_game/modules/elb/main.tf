@@ -28,13 +28,38 @@ resource "aws_lb_target_group" "pokemon_game" {
   }
 }
 
-resource "aws_lb_listener" "front_end" {
+resource "aws_lb_listener" "frontend_http" {
   load_balancer_arn = aws_lb.pokemon_game.arn
   port              = "80"
   protocol          = "HTTP"
+
+  default_action {
+    type             = "redirect"
+    target_group_arn = aws_lb_target_group.pokemon_game.arn
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "frontend_https" {
+  load_balancer_arn = aws_lb.pokemon_game.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = var.lb_certificate_arn
 
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.pokemon_game.arn
   }
 }
+
+# COMMENT THIS IF YOU DONT WANNA SETUP SSL CERTIFICATE VIA ACM
+# resource "aws_lb_listener_certificate" "example" {
+#   listener_arn    = aws_lb_listener.front_end.arn
+#   certificate_arn = var.lb_certificate_arn
+# }

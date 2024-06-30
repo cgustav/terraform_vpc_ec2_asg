@@ -10,7 +10,7 @@ This project deploys a resilient infrastructure on AWS to serve an online Pokemo
 ## Infrastructure Overview
 
 - **VPC**: Custom VPC with four subnets (two public, two private) across two Availability Zones
-- **EC2 Instances**: 
+- **EC2 Instances**:
   - Web servers in an Auto Scaling Group
   - MySQL database server
 - **Load Balancer**: Distributes traffic among web server instances
@@ -25,32 +25,51 @@ This project deploys a resilient infrastructure on AWS to serve an online Pokemo
 
 ## Quick Start
 
-1. Clone the repository:
-   ```
+1. Clone the repository
+
+   ```bash
    git clone https://github.com/your-username/pokemon-game-aws.git
    cd pokemon-game-aws
    ```
 
-2. Initialize Terraform:
+2. Initialize Terraform
+
+   Setup environment variables
+
+   ```bash
+   export AWS_REGION=your_region
+   export AWS_PROFILE=your_profile
    ```
+
+   Without terraform backend:
+
+   ```bash
    terraform init
    ```
 
-3. Review the Terraform plan:
+   Intialize with S3 backend configuration. You can deploy your backend resources and setup the configuration file quickly with [Terraform Backend Builder Project](../backend-builder/)
+
+   ```bash
+   terraform init -backend-config=backend.hcl -var-file=secrets.tfvars
    ```
-   terraform plan
+
+3. Review the Terraform plan:
+
+   ```bash
+   terraform plan -var-file=secrets.tfvars -out planned.tfplan
    ```
 
 4. Apply the Terraform configuration:
-   ```
-   terraform apply
+
+   ```bash
+   terraform apply "planned.tfplan"
    ```
 
 5. Confirm the action by typing `yes` when prompted.
 
 ## Project Structure
 
-```
+```bash
 pokemon-game-aws/
 │
 ├── main.tf           # Main Terraform configuration
@@ -59,7 +78,7 @@ pokemon-game-aws/
 ├── vpc.tf            # VPC and subnet configurations
 ├── ec2.tf            # EC2 instances and Auto Scaling Group
 ├── rds.tf            # RDS MySQL instance
-├── alb.tf            # Application Load Balancer
+├── elb.tf            # Application Load Balancer
 ├── security.tf       # Security Groups
 └── README.md         # This file
 ```
@@ -89,7 +108,7 @@ After successful deployment, Terraform will output:
 
 To destroy the created infrastructure:
 
-```
+```bash
 terraform destroy
 ```
 

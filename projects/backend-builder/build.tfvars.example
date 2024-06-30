@@ -1,0 +1,4 @@
+region = "us-east-1"
+profile = "default"
+bucket_name = "my-terraform-bucket-state-store"
+dynamodb_table_name = "my-terraform-state-lock"

@@ -9,3 +9,6 @@ output "load_balancer_zone_id" {
 output "target_group_arn" {
   value = aws_lb_target_group.pokemon_game.arn
 }
+
+
+# load_balancer_dns

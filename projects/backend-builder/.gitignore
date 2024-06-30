@@ -9,4 +9,6 @@ clone.sh
 sta_*/
 
 secrets.tfvars
+build.tfvars
+infrastructure.json
 

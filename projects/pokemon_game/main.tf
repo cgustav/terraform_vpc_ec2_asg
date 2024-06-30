@@ -1,24 +1,37 @@
 # Main Terraform configuration for Pokemon Online Game AWS Infrastructure
 
+# variable "region" {}
+# variable "profile" {}
+# variable "vpc_cidr" {}
+# variable "public_subnet_cidrs" {}
+# variable "private_subnet_cidrs" {}
+# variable "domain_name" {}
+# variable "subdomain" {}
+# variable "create_route53_zone" {}
+
 terraform {
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 3.0"
     }
   }
+
+  # COMMENT THIS IF YOU DONT WANT TO USE S3 BACKEND 
+  backend "s3" {}
+
 }
 
-provider "aws" {
-  region = var.region
-}
+provider "aws" {}
 
 # Reference to other configuration files
 module "vpc" {
   source               = "./modules/vpc"
-  vpc_cidr             = []
-  public_subnet_cidrs  = []
-  private_subnet_cidrs = []
+  vpc_cidr             = var.vpc_cidr
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+
 }
 
 module "security" {
@@ -31,6 +44,7 @@ module "elb" {
   vpc_id                = module.vpc.vpc_id
   public_subnet_ids     = module.vpc.public_subnet_ids
   alb_security_group_id = module.security.alb_security_group_id
+  lb_certificate_arn    = var.ssl_certificate_arn
 }
 
 module "route53" {

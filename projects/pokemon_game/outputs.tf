@@ -15,12 +15,10 @@ output "private_subnet_ids" {
   value       = module.vpc.private_subnet_ids
 }
 
-output "load_balancer_dns" {
+output "load_balancer_dns_name" {
   description = "DNS name of the load balancer"
-  value       = module.alb.load_balancer_dns
+  value       = module.elb.load_balancer_dns_name
 }
 
-output "database_endpoint" {
-  description = "Endpoint of the RDS database"
-  value       = module.rds.database_endpoint
-}
+
+

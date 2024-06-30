@@ -13,3 +13,8 @@ variable "vpc_id" {
   description = "ID of the VPC"
   type        = string
 }
+
+variable "lb_certificate_arn" {
+  description = "ACM Certificate ARN"
+  type        = string
+}

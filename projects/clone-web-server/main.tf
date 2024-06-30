@@ -1,6 +1,6 @@
 provider "aws" {
-  region = "us-east-1"
-  profile = "personal-tf"
+  region  = var.region
+  profile = var.profile
 }
 
 terraform {
@@ -14,14 +14,14 @@ terraform {
 
 # Config VPC
 resource "aws_vpc" "main" {
-  cidr_block = "69.12.10.0/24"
-  enable_dns_support = true
+  cidr_block           = "69.12.10.0/24"
+  enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name = "PracticeVPC"
+    Name        = "PracticeVPC"
     Environment = "Sandbox"
-    Type = "VPC"
+    Type        = "VPC"
   }
 }
 
@@ -32,19 +32,19 @@ resource "aws_internet_gateway" "gw" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "PracticeInternetGateway"
+    Name        = "PracticeInternetGateway"
     Environment = "Sandbox"
-    Type = "InternetGateway"
+    Type        = "InternetGateway"
   }
 }
 
 # Config subnets 
 
 resource "aws_subnet" "public_subnet" {
-  vpc_id            = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
   # cidr_block        = "69.12.10.0/24"
   # 62 direcciones disponibles
-  cidr_block        = "69.12.10.0/26"
+  cidr_block              = "69.12.10.0/26"
   map_public_ip_on_launch = true
 
   tags = {
@@ -93,8 +93,8 @@ resource "aws_route_table" "public_route_table" {
   }
 
   tags = {
-    Name = "PracticePublicRouteTable"
-    Type = "RouteTable"
+    Name        = "PracticePublicRouteTable"
+    Type        = "RouteTable"
     Environment = "Sandbox"
   }
 }
@@ -169,14 +169,14 @@ resource "aws_iam_policy" "ec2_s3_access_policy" {
       {
         Effect = "Allow",
         Action = [
-            "s3:GetObject",
-            "s3:GetObjectVersion",
-            "s3:ListBucket",
-            "s3:ListBucketVersions",
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:ListBucket",
+          "s3:ListBucketVersions",
         ],
         Resource = [
-            "arn:aws:s3:::webstatics-pfma",
-            "arn:aws:s3:::webstatics-pfma/*"
+          "arn:aws:s3:::YOUR_BUCKET_HERE",
+          "arn:aws:s3:::YOUR_BUCKET_HERE/*"
         ]
       },
       {
@@ -232,8 +232,8 @@ resource "aws_key_pair" "ec2_auth" {
   public_key = file("${path.module}/ec2_practice_key.pub")
 
   tags = {
-    Name = "PracticeKeyPairs"
-    Type = "AWSKeyPair"
+    Name        = "PracticeKeyPairs"
+    Type        = "AWSKeyPair"
     Environment = "Sandbox"
   }
 
@@ -242,13 +242,13 @@ resource "aws_key_pair" "ec2_auth" {
 # Instancia de Windows Server IIS
 resource "aws_instance" "windows_iis_instance" {
   # Microsoft Windows Server 2022 Base (64-bit (x86))
-  ami = "ami-0f496107db66676ff"
-  instance_type = "t3.medium"
-  subnet_id     = aws_subnet.public_subnet.id
-  security_groups = [ aws_security_group.instance_sg.id ]
-  key_name      = aws_key_pair.ec2_auth.key_name
+  ami                  = "ami-0f496107db66676ff"
+  instance_type        = "t3.medium"
+  subnet_id            = aws_subnet.public_subnet.id
+  security_groups      = [aws_security_group.instance_sg.id]
+  key_name             = aws_key_pair.ec2_auth.key_name
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-  user_data = <<-EOF
+  user_data            = <<-EOF
                 <powershell>
                 # Instalar el módulo AWS Tools for PowerShell
                 Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
@@ -269,7 +269,7 @@ resource "aws_instance" "windows_iis_instance" {
                 # Set-ItemProperty -Path 'IIS:\Sites\Default Web Site' -Name physicalPath -Value $sitePath
 
                 # Descargar archivos estáticos de S3
-                # $bucketName = "webstatics-pfma"
+                # $bucketName = "YOUR_BUCKET_HERE"
                 # $localPath = "C:\inetpub\wwwroot\mysite"
                 # $localPath = "C:\inetpub\wwwroot\mysite"
                 # Alternativamente, puedes usar:
@@ -295,8 +295,8 @@ resource "aws_instance" "windows_iis_instance" {
                 EOF
 
   tags = {
-    Name = "WindowsIISInstance"
-    Type = "VirtualMachine"
+    Name        = "WindowsIISInstance"
+    Type        = "VirtualMachine"
     Environment = "Sandbox"
   }
 }
@@ -304,13 +304,13 @@ resource "aws_instance" "windows_iis_instance" {
 # Instancia de Ubuntu con LAMP
 resource "aws_instance" "ubuntu_lamp_instance" {
   # ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-20230829
-  ami = "ami-0408adfcef670a71e"  
-  instance_type = "t2.micro"
-  subnet_id     = aws_subnet.public_subnet.id
-  security_groups = [ aws_security_group.instance_sg.id ]
-  key_name      = aws_key_pair.ec2_auth.key_name
+  ami                  = "ami-0408adfcef670a71e"
+  instance_type        = "t2.micro"
+  subnet_id            = aws_subnet.public_subnet.id
+  security_groups      = [aws_security_group.instance_sg.id]
+  key_name             = aws_key_pair.ec2_auth.key_name
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-  user_data = <<-EOF
+  user_data            = <<-EOF
                 #!/bin/bash
                 # Actualiza todos los paquetes del sistema operativo
                 apt-get update && apt-get upgrade -y
@@ -338,7 +338,7 @@ resource "aws_instance" "ubuntu_lamp_instance" {
                 rm -rf /var/www/html/*
                 
                 # Descargar contenido estático de S3
-                aws s3 sync s3://webstatics-pfma/sta_mu_puni /var/www/html
+                aws s3 sync s3://YOUR_BUCKET_HERE/site /var/www/html
 
                 # Ajustar permisos
                 chown -R www-data:www-data /var/www/html
@@ -350,8 +350,8 @@ resource "aws_instance" "ubuntu_lamp_instance" {
                 EOF
 
   tags = {
-    Name = "UbuntuLAMPInstance"
-    Type = "VirtualMachine"
+    Name        = "UbuntuLAMPInstance"
+    Type        = "VirtualMachine"
     Environment = "Sandbox"
   }
 }
@@ -359,11 +359,11 @@ resource "aws_instance" "ubuntu_lamp_instance" {
 # Instancia de Amazon Linux 2023 con LAMP
 resource "aws_instance" "amazon_linux_lamp_instance" {
   # amzn2-ami-hvm-2.0.20230404.0-x86_64-gp2
-  ami = "ami-0d6927ccef429da8c"
-  instance_type = "t2.micro"
-  subnet_id     = aws_subnet.public_subnet.id
-  security_groups = [ aws_security_group.instance_sg.id ]
-  key_name      = aws_key_pair.ec2_auth.key_name
+  ami                  = "ami-0d6927ccef429da8c"
+  instance_type        = "t2.micro"
+  subnet_id            = aws_subnet.public_subnet.id
+  security_groups      = [aws_security_group.instance_sg.id]
+  key_name             = aws_key_pair.ec2_auth.key_name
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
 
@@ -376,8 +376,8 @@ resource "aws_instance" "amazon_linux_lamp_instance" {
                 systemctl enable mariadb
 
                 # Descargar contenido estático de S3
-                # Ej: aws s3 sync s3://mi-bucket-name/mi-carpeta-estatica /var/www/html
-                aws s3 sync s3://webstatics-pfma/sta_mu_comb /var/www/html
+                # Ej: aws s3 sync s3://bucket/mi-carpeta-estatica /var/www/html
+                aws s3 sync s3://YOUR_BUCKET_HERE/site /var/www/html
                 
                 # Ajustar permisos
                 chown -R apache:apache /var/www/html
@@ -389,8 +389,8 @@ resource "aws_instance" "amazon_linux_lamp_instance" {
                 EOF
 
   tags = {
-    Name = "AmazonLinuxLAMPInstance"
-    Type = "VirtualMachine"
+    Name        = "AmazonLinuxLAMPInstance"
+    Type        = "VirtualMachine"
     Environment = "Sandbox"
   }
 }
@@ -429,7 +429,7 @@ resource "aws_security_group" "instance_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
- # Permitir acceso a FTP
+  # Permitir acceso a FTP
   ingress {
     from_port   = 21
     to_port     = 21
@@ -454,8 +454,8 @@ resource "aws_security_group" "instance_sg" {
   }
 
   tags = {
-    Name = "InstanceSecurityGroup"
-    Type = "SecurityGroup"
+    Name        = "InstanceSecurityGroup"
+    Type        = "SecurityGroup"
     Environment = "Sandbox"
   }
 }

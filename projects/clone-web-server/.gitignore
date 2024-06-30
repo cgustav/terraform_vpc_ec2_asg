@@ -1,0 +1,10 @@
+.terraform
+.terraform.*
+ec2_practice_key.pub
+ec2_practice_key
+planned.tfplan
+terraform.tfstate
+terraform.tfstate.*
+clone.sh
+sta_*/
+

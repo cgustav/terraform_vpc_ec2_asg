@@ -8,3 +8,5 @@ terraform.tfstate.*
 clone.sh
 sta_*/
 
+chuink.yaml
+.DS_Store

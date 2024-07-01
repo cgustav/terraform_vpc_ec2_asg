@@ -5,11 +5,21 @@ resource "aws_security_group" "alb" {
   description = "Security group for ALB"
   vpc_id      = var.vpc_id
 
+
+  ingress {
+    from_port   = 3001
+    to_port     = 3001
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "API Port"
+  }
+
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Web Port"
   }
 
   ingress {
@@ -17,7 +27,10 @@ resource "aws_security_group" "alb" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "SSL Web Port"
   }
+
+
 
   egress {
     from_port   = 0
@@ -36,12 +49,23 @@ resource "aws_security_group" "web" {
   description = "Security group for web servers"
   vpc_id      = var.vpc_id
 
-
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH from outside VPC"
+
+    # cidr_blocks = [var.vpc_cidr]
+    # description = "SSH from within VPC"
+  }
+
+  ingress {
+    from_port       = 3001
+    to_port         = 3001
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+    description     = "API HTTP from ALB"
   }
 
   ingress {
@@ -49,6 +73,7 @@ resource "aws_security_group" "web" {
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
+    description     = "HTTP from ALB"
   }
 
   ingress {
@@ -56,6 +81,7 @@ resource "aws_security_group" "web" {
     to_port         = 443
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
+    description     = "HTTPS from ALB"
   }
 
   egress {
@@ -80,6 +106,17 @@ resource "aws_security_group" "db" {
     to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
+    description     = "MySQL from web servers"
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "SSH from outside VPC"
+    # cidr_blocks = [var.vpc_cidr]
+    # description = "SSH from within VPC"
   }
 
   egress {
@@ -94,4 +131,29 @@ resource "aws_security_group" "db" {
   }
 }
 
+# Security Group for internal communication
+resource "aws_security_group" "internal" {
+  name        = "pokemon-game-internal-sg"
+  description = "Security group for internal communication"
+  vpc_id      = var.vpc_id
 
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    self        = true
+    description = "Allow all internal traffic"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+  }
+
+  tags = {
+    Name = "pokemon-game-internal-sg"
+  }
+}

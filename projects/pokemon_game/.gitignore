@@ -9,4 +9,5 @@ clone.sh
 sta_*/
 
 secrets.tfvars
+errored.tfstate
 

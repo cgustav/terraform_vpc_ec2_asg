@@ -10,7 +10,7 @@ This Backend Builder simplifies and automates the process of creating a robust r
 ## Prerequisites
 
 - Terraform installed (recommended version: 1.0 or higher)
-- Linux-based shell interface
+- Linux-based CLI
 - AWS credentials with sufficient permissions to perform S3 and DynamoDB management operations
 - AWS CLI configured with appropriate credentials
 

@@ -8,7 +8,6 @@ terraform.tfstate.*
 clone.sh
 sta_*/
 
-secrets.tfvars
-build.tfvars
+*.tfvars
 infrastructure.json
 

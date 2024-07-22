@@ -47,5 +47,4 @@ variable "create_route53_zone" {
 variable "ssl_certificate_arn" {
   description = "ACM ARN of the main SSL Cetificate"
   type        = string
-
 }

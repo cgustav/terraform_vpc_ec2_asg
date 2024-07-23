@@ -1,3 +1,3 @@
 output "buckets" {
-  value = aws_s3_bucket.this[*].bucket
+  value = aws_s3_bucket.this[*]
 }

@@ -130,3 +130,13 @@ variable "project" {
   type        = string
 }
 
+variable "public_assets_bucket_manager_username" {
+  description = "IAM Username of public access bucket manager (with permissions to upload images)."
+  type        = string
+}
+
+variable "public_assets_bucket_name" {
+  description = "The name of accesible bucket to display images and other assets."
+  type        = string
+}
+

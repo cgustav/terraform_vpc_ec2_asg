@@ -84,41 +84,7 @@ module "rds" {
   }
 }
 
-# Create DB SSM Secrets
-module "ssm" {
-  source = "./modules/ssm"
 
-  db_name_name  = "db_name"
-  db_name_value = module.rds.db_name
-
-  db_endpoint_name  = "db_endpoint"
-  db_endpoint_value = module.rds.db_instance_endpoint
-
-  db_username_name  = "db_username"
-  db_username_value = module.rds.db_instance_username
-
-  db_password_name  = "db_password"
-  db_password_value = module.rds.db_instance_password
-
-  frontend_dns_name  = "frontend_dns"
-  frontend_dns_value = "https://${module.route53.route53_record_fqdn}"
-
-  api_address_name  = "api_address"
-  api_address_value = "https://${module.route53.route53_record_fqdn}:3001"
-
-  s3_bucket_region_name  = "public_bucket_region_name"
-  s3_bucket_region_value = "${module.s3.buckets[0].bucket.region}"
-
-  s3_bucket_name_name  = "public_bucket_name"
-  s3_bucket_name_value = "${module.s3.buckets[0].bucket.name}"
-
-  s3_bucket_key_id_name  = "public_key_id"
-  s3_bucket_key_id_value = ""
-
-  s3_bucket_secret_key_name  = "public_secret_key"
-  s3_bucket_secret_key_value = ""
-
-}
 
 # Create buckets
 
@@ -238,7 +204,7 @@ module "s3" {
 
       */
     {
-      name       = "meme-gallery-static-storage",
+      name       = "${var.public_assets_bucket_name}",
       versioning = false,
       bucket_acl = "public-read"
       cors_rules = [
@@ -258,7 +224,7 @@ module "s3" {
             "Action" : [
               "s3:GetObject"
             ],
-            "Resource" : "arn:aws:s3:::meme-gallery-static-storage/*",
+            "Resource" : "arn:aws:s3:::${var.public_assets_bucket_name}/*",
             "Principal" : "*"
           },
           {
@@ -266,7 +232,7 @@ module "s3" {
             "Action" : [
               "s3:PutObject"
             ],
-            "Resource" : "arn:aws:s3:::meme-gallery-static-storage/*",
+            "Resource" : "arn:aws:s3:::${var.public_assets_bucket_name}/*",
             "Principal" : "*",
             "Condition" : {
               "StringEquals" : {
@@ -281,6 +247,62 @@ module "s3" {
 
 
   ]
+}
+
+module "iam" {
+  source = "./modules/iam"
+  user_name = "${var.public_assets_bucket_manager_username}"
+  inline_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListObject",
+        ]
+        Resource = "arn:aws:s3:::${var.public_assets_bucket_name}/*"
+      }
+    ]
+  })
+}
+
+
+# Create DB SSM Secrets
+module "ssm" {
+  source = "./modules/ssm"
+
+  db_name_name  = "db_name"
+  db_name_value = module.rds.db_name
+
+  db_endpoint_name  = "db_endpoint"
+  db_endpoint_value = module.rds.db_instance_endpoint
+
+  db_username_name  = "db_username"
+  db_username_value = module.rds.db_instance_username
+
+  db_password_name  = "db_password"
+  db_password_value = module.rds.db_instance_password
+
+  frontend_dns_name  = "frontend_dns"
+  frontend_dns_value = "https://${module.route53.route53_record_fqdn}"
+
+  api_address_name  = "api_address"
+  api_address_value = "https://${module.route53.route53_record_fqdn}:3001"
+
+  s3_bucket_region_name  = "public_bucket_region_name"
+  s3_bucket_region_value = "${module.s3.buckets[0].region}"
+
+  s3_bucket_name_name  = "public_bucket_name"
+  s3_bucket_name_value = "${module.s3.buckets[0].bucket}"
+
+  s3_bucket_key_id_name  = "public_key_id"
+  s3_bucket_key_id_value = "${module.iam.access_key}"
+
+  s3_bucket_secret_key_name  = "public_secret_key"
+  s3_bucket_secret_key_value = "${module.iam.secret_key}"
+
 }
 
 # data "archive_file" "rds_layer_version" {
@@ -437,34 +459,139 @@ module "ec2" {
       user_data          = <<-EOF
                           #!/bin/bash
                           # UPDATE PACKAGE MANAGER
-                          apt update --fix-missing
+                          apt update -y --fix-missing
 
                           # INSTALL AWS CLI AND MYSQL CLIENT
-                          apt install -y awscli mysql-client
+                          apt install -y awscli mysql-client git
+                          
+                          # INSTALL AND CONFIGURE NODEJS SCRIPT
+                          cat > /tmp/install-node.sh <<EOF2
+                          echo "Setting up NodeJS Environment"
+                          
+                          # Fork repo, review this
+                          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh
+                          echo 'export NVM_DIR="/home/ubuntu/.nvm"' >> /home/ubuntu/.bashrc
+                          echo '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm' >> /home/ubuntu/.bashrc
 
-                          # RETRIEVE PARAMETERS FROM SSM
-                          DB_ENDPOINT=$(aws ssm get-parameter --name db_endpoint --region ${var.aws_region} --query 'Parameter.Value' --output text)
-                          DB_USERNAME=$(aws ssm get-parameter --name db_username --region ${var.aws_region} --query 'Parameter.Value' --output text)
-                          DB_PASSWORD=$(aws ssm get-parameter --name db_password --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          # Dot source the files to ensure that variables are available within the current shell
+                          . /home/ubuntu/.nvm/nvm.sh
+                          . /home/ubuntu/.profile
+                          . /home/ubuntu/.bashrc
 
+                          # Install NVM, NPM, Node.JS & Grunt
+                          nvm install --lts
+                          nvm ls
+
+                          # Install subdependencies
+                          npm install pm2@latest -g
+
+                          EOF2
+
+                          # Execute NodeJS setup configuration as non root user
+                          chown ubuntu:ubuntu /tmp/install-node.sh && chmod a+x /tmp/install-node.sh
+                          sleep 1; su - ubuntu -c "/tmp/install-node.sh"
+
+                          cat > /tmp/install-apps.sh <<EOF3
+                          cd /home/ubuntu
+
+                          git clone https://github.com/cgustav/meme-gallery.git
+
+                          # RETRIEVE PARAMETERS FROM SSM - FRONTEND WEB SERVICE
+                          PUBLIC_DNS=$(aws ssm get-parameter --name ${module.ssm.frontend_dns_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          API_URL=$(aws ssm get-parameter --name ${module.ssm.api_address_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          BUCKET_REGION=$(aws ssm get-parameter --name ${module.ssm.s3_bucket_region_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          BUCKET_NAME=$(aws ssm get-parameter --name ${module.ssm.s3_bucket_name_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          BUCKET_KEY_ID=$(aws ssm get-parameter --name ${module.ssm.s3_bucket_key_id_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          BUCKET_SECRET_ACCESS_KEY=$(aws ssm get-parameter --name ${module.ssm.s3_bucket_secret_key_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          
                           # EXPORT PARAMETERS AS ENVIRONMENT VARIABLES
-                          echo "export DB_ENDPOINT=$DB_ENDPOINT" >> /etc/environment
-                          echo "export DB_USERNAME=$DB_USERNAME" >> /etc/environment
-                          echo "export DB_PASSWORD=$DB_PASSWORD" >> /etc/environment
+                          echo "export PUBLIC_DNS=$PUBLIC_DNS" >> /etc/environment
+
+                          echo "NEXT_PUBLIC_API_URL=$API_URL" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_AWS_REGION=$BUCKET_REGION" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_AWS_ACCESS_KEY_ID=$BUCKET_KEY_ID" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY=$BUCKET_SECRET_ACCESS_KEY" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_AWS_S3_BUCKET_NAME=$BUCKET_NAME" >> ./meme-gallery/meme-gallery-frontend/.env.local
+
+                          # RETRIEVE PARAMETERS FROM SSM - BACKEND API SERVICE
+                          DB_HOST=$(aws ssm get-parameter --name ${module.ssm.db_endpoint_name} --region ${var.aws_region} --query 'Parameter.Value' --output text)
+                          DB_USERNAME=$(aws ssm get-parameter --name ${module.ssm.db_username_name} --region ${var.aws_region} --query 'Parameter.Value' --output text)
+                          DB_PASSWORD=$(aws ssm get-parameter --name ${module.ssm.db_password_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          DB_NAME=$(aws ssm get-parameter --name ${module.ssm.db_name_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
+                          
+                          # EXPORT PARAMETERS AS ENVIRONMENT VARIABLES
+                          echo "DB_HOST=$DB_HOST" >> ./meme-gallery/api/.env
+                          echo "DB_USER=$DB_USERNAME" >> ./meme-gallery/api/.env
+                          echo "DB_PASSWORD=$DB_PASSWORD" >> ./meme-gallery/api/.env
+                          echo "DB_NAME=$DB_NAME" >> ./meme-gallery/api/.env
+
+                          # echo "export DB_ENDPOINT=$DB_ENDPOINT" >> /etc/environment
+                          # echo "export DB_USERNAME=$DB_USERNAME" >> /etc/environment
+                          # echo "export DB_PASSWORD=$DB_PASSWORD" >> /etc/environment
+
+                          # SETUP AND SERVE FRONTEND WEB APP
+                          cd ./meme-gallery/meme-gallery-frontend
+                          npm install
+                          npm run build
+                          
+                          pm2 start npm --name "meme-gallery-frontend" -- start
+                          pm2 save
+                          pm2 startup
+
+                          # SETUP AND SERVE BACKEND API SERVICE
+                          cd ../api
+                          npm install
+
+                          pm2 start npm --name "meme-gallery-api" -- start
+                          pm2 save
+                          pm2 startup
+
+                          cd ../..
+
+                          EOF3
+
+
+                          #RUN COMMAND 
+                          chown ubuntu:ubuntu /tmp/install-apps.sh && chmod a+x /tmp/install-apps.sh
+                          sleep 1; su - ubuntu -c "/tmp/install-apps.sh"
 
                           # INSTALL, START and ENABLE NGINX
                           apt install -y nginx
                           systemctl start nginx
                           systemctl enable nginx
 
+                          # CONFIGURE REVERSE PROXY
+                          tee /etc/nginx/conf.d/meme-gallery-frontend.conf > /dev/null << 'EOF4'
+                          server {
+                            listen 80;
+                            server_name your-domain.com;
+                            location / {
+                              proxy_pass http://localhost:3000;
+                              proxy_http_version 1.1;
+                              proxy_set_header Upgrade \$http_upgrade;
+                              proxy_set_header Connection 'upgrade';
+                              proxy_set_header Host \$host;
+                              proxy_cache_bypass \$http_upgrade;
+                            }
+                          }
+                          EOF4
+
+                          echo "ABOUT TO CONFIGURE NGINX CONF WITH PUBLIC DNS: $PUBLIC_DNS"
+                          sed -i "s/server_name your-domain.com;/server_name $PUBLIC_DNS;/" /etc/nginx/conf.d/meme-gallery-frontend.conf
+                         
+                          echo "ABOUT TO TEST NGINX CONFIGS"
+                          nginx -t
+
+                          systemctl restart nginx
+
                           # CHANGE FILE PERMISSION TO PERMIT MODIFICATION OF DEFAULT WEB FILE
-                          chmod 0777 /var/www/html/index.nginx-debian.html
+                          # chmod 0777 /var/www/html/index.nginx-debian.html
 
                           # MODIFY DEFAULT WEB DOCUMENT
-                          echo "<html><h1>Hello from your web server!</h1></html>" > /var/www/html/index.nginx-debian.html
+                          # echo "<html><h1>Hello from your web server!</h1></html>" > /var/www/html/index.nginx-debian.html
 
                           # RESTART NGINX
-                          systemctl start nginx
+                          # systemctl start nginx
 
                           EOF
 

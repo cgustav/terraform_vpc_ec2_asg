@@ -17,6 +17,54 @@ data "aws_ami" "ubuntu_noble_server" {
   }
 }
 
+
+# Crear la política de permisos
+resource "aws_iam_policy" "ec2_ssm_policy" {
+  name        = "ec2_ssm_policy"
+  description = "A policy that allows EC2 instances to access SSM parameters"
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Action" : [
+          "ssm:GetParameter"
+        ],
+        "Resource" : "*"
+      }
+    ]
+  })
+}
+
+# Crear el rol IAM
+resource "aws_iam_role" "ec2_ssm_role" {
+  name = "ec2_ssm_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# Adjuntar la política al rol
+resource "aws_iam_role_policy_attachment" "ec2_ssm_role_policy_attachment" {
+  role       = aws_iam_role.ec2_ssm_role.name
+  policy_arn = aws_iam_policy.ec2_ssm_policy.arn
+}
+
+
+resource "aws_iam_instance_profile" "ec2_instance_profile" {
+  name = "ec2_instance_profile"
+  role = aws_iam_role.ec2_ssm_role.name
+}
+
 resource "aws_launch_template" "server" {
   for_each      = { for idx, config in var.server_configs : idx => config }
   name_prefix   = "meme-gallery-${each.value.name}-"
@@ -29,6 +77,12 @@ resource "aws_launch_template" "server" {
 
   tags = {
     Name = "meme-gallery-${each.value.name}-server"
+  }
+
+
+  # Agregar el IAM Instance Profile aquí
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_instance_profile.name
   }
 }
 

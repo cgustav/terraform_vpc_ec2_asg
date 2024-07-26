@@ -9,6 +9,7 @@ resource "aws_ssm_parameter" "db_endpoint" {
   name  = var.db_endpoint_name
   type  = "String"
   value = var.db_endpoint_value
+
 }
 
 resource "aws_ssm_parameter" "db_username" {
@@ -18,23 +19,25 @@ resource "aws_ssm_parameter" "db_username" {
 }
 
 resource "aws_ssm_parameter" "db_password" {
-  name  = var.db_password_name
-  type  = "SecureString"
-  value = var.db_password_value
+  name      = var.db_password_name
+  type      = "SecureString"
+  value     = var.db_password_value
+  overwrite = true
 }
 
 # Variables for frontend
 # ---------------------------
 resource "aws_ssm_parameter" "frontend_dns" {
-  name  = var.db_password_name
+  name  = var.frontend_dns_name
   type  = "String"
-  value = var.db_password_value
+  value = var.frontend_dns_value
 }
 
 resource "aws_ssm_parameter" "api_address" {
-  name  = var.db_password_name
-  type  = "String"
-  value = var.db_password_value
+  name      = var.api_address_name
+  type      = "String"
+  value     = var.api_address_value
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "s3_bucket_region" {
@@ -50,13 +53,15 @@ resource "aws_ssm_parameter" "s3_bucket_name" {
 }
 
 resource "aws_ssm_parameter" "s3_bucket_key_id" {
-  name  = var.s3_bucket_key_id_name
-  type  = "SecureString"
-  value = var.s3_bucket_key_id_value
+  name      = var.s3_bucket_key_id_name
+  type      = "SecureString"
+  value     = var.s3_bucket_key_id_value
+  overwrite = true
 }
 
 resource "aws_ssm_parameter" "s3_bucket_secret_key" {
-  name  = var.s3_bucket_secret_key_name
-  type  = "SecureString"
-  value = var.s3_bucket_secret_key_value
+  name      = var.s3_bucket_secret_key_name
+  type      = "SecureString"
+  value     = var.s3_bucket_secret_key_value
+  overwrite = true
 }

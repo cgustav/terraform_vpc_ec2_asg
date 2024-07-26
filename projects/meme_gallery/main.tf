@@ -76,7 +76,7 @@ module "rds" {
   vpc_security_group_ids = [module.security.internal_security_group_id, module.security.db_security_group_id]
   db_subnet_group_name   = module.vpc.rds_subnet_group_name
   subnet_ids             = module.vpc.private_subnet_ids
-  init_script            = data.template_file.init_script.rendered
+  # init_script            = data.template_file.init_script.rendered
   tags = {
     Name        = "${var.project}-RDS"
     Environment = var.environment
@@ -210,7 +210,7 @@ module "s3" {
       cors_rules = [
         {
           allowed_headers = ["*"]
-          allowed_methods = ["GET", "PUT"]
+          allowed_methods = ["GET", "HEAD", "PUT"]
           allowed_origins = ["*"]
           expose_headers  = ["ETag"]
           max_age_seconds = 3000
@@ -222,23 +222,18 @@ module "s3" {
           {
             "Effect" : "Allow",
             "Action" : [
-              "s3:GetObject"
+              "s3:GetObject",
+              "s3:PutObject",
+              "s3:ListBucket"
+
             ],
-            "Resource" : "arn:aws:s3:::${var.public_assets_bucket_name}/*",
-            "Principal" : "*"
-          },
-          {
-            "Effect" : "Allow",
-            "Action" : [
-              "s3:PutObject"
-            ],
-            "Resource" : "arn:aws:s3:::${var.public_assets_bucket_name}/*",
+            "Resource" : ["arn:aws:s3:::${var.public_assets_bucket_name}", "arn:aws:s3:::${var.public_assets_bucket_name}/*"],
             "Principal" : "*",
-            "Condition" : {
-              "StringEquals" : {
-                "s3:x-amz-acl" : "public-read"
-              }
-            }
+            # "Condition" : {
+            #   "StringEquals" : {
+            #     "s3:x-amz-acl" : "public-read"
+            #   }
+            # }
           }
         ]
         }
@@ -250,8 +245,8 @@ module "s3" {
 }
 
 module "iam" {
-  source = "./modules/iam"
-  user_name = "${var.public_assets_bucket_manager_username}"
+  source    = "./modules/iam"
+  user_name = var.public_assets_bucket_manager_username
   inline_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -274,7 +269,7 @@ module "ssm" {
   source = "./modules/ssm"
 
   db_name_name  = "db_name"
-  db_name_value = module.rds.db_name
+  db_name_value = "meme_gallery"
 
   db_endpoint_name  = "db_endpoint"
   db_endpoint_value = module.rds.db_instance_endpoint
@@ -292,16 +287,16 @@ module "ssm" {
   api_address_value = "https://${module.route53.route53_record_fqdn}:3001"
 
   s3_bucket_region_name  = "public_bucket_region_name"
-  s3_bucket_region_value = "${module.s3.buckets[0].region}"
+  s3_bucket_region_value = module.s3.buckets[0].region
 
   s3_bucket_name_name  = "public_bucket_name"
-  s3_bucket_name_value = "${module.s3.buckets[0].bucket}"
+  s3_bucket_name_value = module.s3.buckets[0].bucket
 
   s3_bucket_key_id_name  = "public_key_id"
-  s3_bucket_key_id_value = "${module.iam.access_key}"
+  s3_bucket_key_id_value = module.iam.access_key
 
   s3_bucket_secret_key_name  = "public_secret_key"
-  s3_bucket_secret_key_value = "${module.iam.secret_key}"
+  s3_bucket_secret_key_value = module.iam.secret_key
 
 }
 
@@ -348,90 +343,90 @@ data "archive_file" "lambda" {
 
 
 
-module "lambda" {
-  source = "./modules/lambda"
-  lambda_functions = [
-    # {
-    #   function_name = "backup_rds"
-    #   handler       = "index.handler"
-    #   runtime       = "nodejs14.x"
-    #   source_path   = "path/to/backup_rds.zip"
-    #   environment_variables = {
-    #     RDS_INSTANCE_ID = aws_db_instance.mydb.id
-    #     S3_BUCKET       = "my-backup-bucket"
-    #   }
-    #   subnet_ids         = module.vpc.public_subnet_ids
-    #   security_group_ids = [aws_security_group.lambda_sg.id]
-    #   iam_policy_path    = "path/to/backup_rds_policy.json"
-    # },
-    {
-      function_name    = "rds_bootstraper"
-      handler          = "index.handler"
-      runtime          = "nodejs18.x"
-      layers           = module.lambda_layers.layer_arns,
-      source_path      = data.archive_file.lambda.output_path
-      source_code_hash = data.archive_file.lambda.output_base64sha256
-      environment_variables = {
-        DB_ENDPOINT_PARAM = module.ssm.db_endpoint_name,
-        DB_NAME_PARAM     = module.ssm.db_name_name,
-        DB_USERNAME_PARAM = module.ssm.db_username_name,
-        DB_PASSWORD_PARAM = module.ssm.db_password_name,
-        SQL_SCRIPT_URL    = "https://raw.githubusercontent.com/cgustav/meme-gallery/master/data/initdb.sql"
-      }
-      subnet_ids         = module.vpc.public_subnet_ids
-      security_group_ids = [module.security.internal_security_group_id]
-      iam_policy = jsonencode({
-        "Version" : "2012-10-17",
-        "Statement" : [
-          {
-            "Effect" : "Allow",
-            "Action" : [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource" : "arn:aws:logs:*:*:*"
-          },
-          {
-            "Effect" : "Allow",
-            "Action" : ["secretsmanager:GetSecretValue"],
-            "Resource" : "*"
-          },
+# module "lambda" {
+#   source = "./modules/lambda"
+# lambda_functions = [
+#   # {
+#   #   function_name = "backup_rds"
+#   #   handler       = "index.handler"
+#   #   runtime       = "nodejs14.x"
+#   #   source_path   = "path/to/backup_rds.zip"
+#   #   environment_variables = {
+#   #     RDS_INSTANCE_ID = aws_db_instance.mydb.id
+#   #     S3_BUCKET       = "my-backup-bucket"
+#   #   }
+#   #   subnet_ids         = module.vpc.public_subnet_ids
+#   #   security_group_ids = [aws_security_group.lambda_sg.id]
+#   #   iam_policy_path    = "path/to/backup_rds_policy.json"
+#   # },
+#   {
+#     function_name    = "rds_bootstraper"
+#     handler          = "index.handler"
+#     runtime          = "nodejs18.x"
+#     layers           = module.lambda_layers.layer_arns,
+#     source_path      = data.archive_file.lambda.output_path
+#     source_code_hash = data.archive_file.lambda.output_base64sha256
+#     environment_variables = {
+#       DB_ENDPOINT_PARAM = module.ssm.db_endpoint_name,
+#       DB_NAME_PARAM     = module.ssm.db_name_name,
+#       DB_USERNAME_PARAM = module.ssm.db_username_name,
+#       DB_PASSWORD_PARAM = module.ssm.db_password_name,
+#       SQL_SCRIPT_URL    = "https://raw.githubusercontent.com/cgustav/meme-gallery/master/data/initdb.sql"
+#     }
+#     subnet_ids         = module.vpc.public_subnet_ids
+#     security_group_ids = [module.security.internal_security_group_id]
+#     iam_policy = jsonencode({
+#       "Version" : "2012-10-17",
+#       "Statement" : [
+#         {
+#           "Effect" : "Allow",
+#           "Action" : [
+#             "logs:CreateLogGroup",
+#             "logs:CreateLogStream",
+#             "logs:PutLogEvents"
+#           ],
+#           "Resource" : "arn:aws:logs:*:*:*"
+#         },
+#         {
+#           "Effect" : "Allow",
+#           "Action" : ["secretsmanager:GetSecretValue"],
+#           "Resource" : "*"
+#         },
 
-          {
-            "Effect" : "Allow",
-            "Action" : ["rds:DescribeDBInstances"],
-            "Resource" : "*"
-          },
+#         {
+#           "Effect" : "Allow",
+#           "Action" : ["rds:DescribeDBInstances"],
+#           "Resource" : "*"
+#         },
 
-          {
-            "Sid" : "AllowEIPForLambdas",
-            "Effect" : "Allow",
-            "Action" : [
-              "ec2:DescribeNetworkInterfaces",
-              "ec2:CreateNetworkInterface",
-              "ec2:DeleteNetworkInterface",
-              "ec2:DescribeInstances",
-              "ec2:AttachNetworkInterface"
-            ],
-            "Resource" : "*"
-          }
-        ]
-        }
-      )
-      log_retention_in_days = 14
-    }
-  ]
-}
+#         {
+#           "Sid" : "AllowEIPForLambdas",
+#           "Effect" : "Allow",
+#           "Action" : [
+#             "ec2:DescribeNetworkInterfaces",
+#             "ec2:CreateNetworkInterface",
+#             "ec2:DeleteNetworkInterface",
+#             "ec2:DescribeInstances",
+#             "ec2:AttachNetworkInterface"
+#           ],
+#           "Resource" : "*"
+#         }
+#       ]
+#       }
+#     )
+#     log_retention_in_days = 14
+#   }
+# ]
+# }
 
 # TODO
 # Execute your SQL script once your RDS instance and
 # bootstrapper function were fully deployed
-resource "aws_lambda_invocation" "bootstrapper_execution" {
-  function_name = module.lambda.lambda_function_names[0]
-  input         = jsonencode({})
-  depends_on    = [module.lambda, module.rds]
-}
+# resource "aws_lambda_invocation" "bootstrapper_execution" {
+#   function_name = module.lambda.lambda_function_names[0]
+#   input         = jsonencode({})
+#   depends_on    = [module.lambda, module.rds]
+# }
 
 
 
@@ -461,15 +456,18 @@ module "ec2" {
                           # UPDATE PACKAGE MANAGER
                           apt update -y --fix-missing
 
-                          # INSTALL AWS CLI AND MYSQL CLIENT
-                          apt install -y awscli mysql-client git
+                          # MYSQL CLIENT & GIT
+                          apt install -y mysql-client-core-8.0 git
+
+                          # INSTALL AWS CLI
+                          sudo snap install aws-cli --classic
                           
                           # INSTALL AND CONFIGURE NODEJS SCRIPT
                           cat > /tmp/install-node.sh <<EOF2
                           echo "Setting up NodeJS Environment"
                           
                           # Fork repo, review this
-                          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh
+                          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
                           echo 'export NVM_DIR="/home/ubuntu/.nvm"' >> /home/ubuntu/.bashrc
                           echo '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm' >> /home/ubuntu/.bashrc
 
@@ -489,10 +487,26 @@ module "ec2" {
 
                           # Execute NodeJS setup configuration as non root user
                           chown ubuntu:ubuntu /tmp/install-node.sh && chmod a+x /tmp/install-node.sh
-                          sleep 1; su - ubuntu -c "/tmp/install-node.sh"
+                          sleep 1; su - ubuntu -c "source /tmp/install-node.sh"
+
+                          # TODO SOURCE
+                          echo "Enhance installation: "
+                          nvm version 
 
                           cat > /tmp/install-apps.sh <<EOF3
                           cd /home/ubuntu
+
+                          echo 'export NVM_DIR="/home/ubuntu/.nvm"' >> /home/ubuntu/.bashrc
+                          echo '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm' >> /home/ubuntu/.bashrc
+
+                          # Dot source the files to ensure that variables are available within the current shell
+                          . /home/ubuntu/.nvm/nvm.sh
+                          . /home/ubuntu/.profile
+                          . /home/ubuntu/.bashrc
+
+                          echo "Ensure nvm & node inside install apps script..."
+                          node --version
+                          npm --version
 
                           git clone https://github.com/cgustav/meme-gallery.git
 
@@ -505,13 +519,14 @@ module "ec2" {
                           BUCKET_SECRET_ACCESS_KEY=$(aws ssm get-parameter --name ${module.ssm.s3_bucket_secret_key_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
                           
                           # EXPORT PARAMETERS AS ENVIRONMENT VARIABLES
-                          echo "export PUBLIC_DNS=$PUBLIC_DNS" >> /etc/environment
+                          # echo "export PUBLIC_DNS=memes.zozlabs.cloud" >> /etc/environment
+                          sudo sh -c 'echo "export PUBLIC_DNS=$PUBLIC_DNS" >> /etc/environment'
 
-                          echo "NEXT_PUBLIC_API_URL=$API_URL" >> ./meme-gallery/meme-gallery-frontend/.env.local
-                          echo "NEXT_PUBLIC_AWS_REGION=$BUCKET_REGION" >> ./meme-gallery/meme-gallery-frontend/.env.local
-                          echo "NEXT_PUBLIC_AWS_ACCESS_KEY_ID=$BUCKET_KEY_ID" >> ./meme-gallery/meme-gallery-frontend/.env.local
-                          echo "NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY=$BUCKET_SECRET_ACCESS_KEY" >> ./meme-gallery/meme-gallery-frontend/.env.local
-                          echo "NEXT_PUBLIC_AWS_S3_BUCKET_NAME=$BUCKET_NAME" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_API_URL=https://memes.zozlabs.cloud:3001" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_AWS_REGION=us-east-1" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_AWS_ACCESS_KEY_ID=AKIAXR7QNNWVXRY6PPWB" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY=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" >> ./meme-gallery/meme-gallery-frontend/.env.local
+                          echo "NEXT_PUBLIC_AWS_S3_BUCKET_NAME=meme-gallery-useast1-mk1899gr" >> ./meme-gallery/meme-gallery-frontend/.env.local
 
                           # RETRIEVE PARAMETERS FROM SSM - BACKEND API SERVICE
                           DB_HOST=$(aws ssm get-parameter --name ${module.ssm.db_endpoint_name} --region ${var.aws_region} --query 'Parameter.Value' --output text)
@@ -520,10 +535,15 @@ module "ec2" {
                           DB_NAME=$(aws ssm get-parameter --name ${module.ssm.db_name_name} --region ${var.aws_region} --with-decryption --query 'Parameter.Value' --output text)
                           
                           # EXPORT PARAMETERS AS ENVIRONMENT VARIABLES
-                          echo "DB_HOST=$DB_HOST" >> ./meme-gallery/api/.env
-                          echo "DB_USER=$DB_USERNAME" >> ./meme-gallery/api/.env
-                          echo "DB_PASSWORD=$DB_PASSWORD" >> ./meme-gallery/api/.env
-                          echo "DB_NAME=$DB_NAME" >> ./meme-gallery/api/.env
+                          echo "DB_HOST=instance-gallerydb.clqwoo0a4n72.us-east-1.rds.amazonaws.com" >> ./meme-gallery/api/.env
+                          echo "DB_USER=AdminCross" >> ./meme-gallery/api/.env
+                          echo "DB_PASSWORD=[]Ml19u9N?$D6CjDP5KN7zQE" >> ./meme-gallery/api/.env
+                          echo "DB_NAME=meme_gallery" >> ./meme-gallery/api/.env
+
+                          sudo sh -c 'echo "export DB_HOST=instance-gallerydb.clqwoo0a4n72.us-east-1.rds.amazonaws.com" >> /etc/environment'
+                          sudo sh -c 'echo "export DB_USER=AdminCross" >> /etc/environment'
+                          sudo sh -c 'echo "export DB_PASSWORD=[]Ml19u9N?$D6CjDP5KN7zQE" >> /etc/environment'
+                          sudo sh -c 'echo "export DB_NAME=meme_gallery" >> /etc/environment'
 
                           # echo "export DB_ENDPOINT=$DB_ENDPOINT" >> /etc/environment
                           # echo "export DB_USERNAME=$DB_USERNAME" >> /etc/environment
@@ -553,7 +573,7 @@ module "ec2" {
 
                           #RUN COMMAND 
                           chown ubuntu:ubuntu /tmp/install-apps.sh && chmod a+x /tmp/install-apps.sh
-                          sleep 1; su - ubuntu -c "/tmp/install-apps.sh"
+                          sleep 1; su - ubuntu -c "source /tmp/install-apps.sh"
 
                           # INSTALL, START and ENABLE NGINX
                           apt install -y nginx
@@ -564,7 +584,7 @@ module "ec2" {
                           tee /etc/nginx/conf.d/meme-gallery-frontend.conf > /dev/null << 'EOF4'
                           server {
                             listen 80;
-                            server_name your-domain.com;
+                            server_name memes.zozlabs.cloud;
                             location / {
                               proxy_pass http://localhost:3000;
                               proxy_http_version 1.1;
@@ -576,8 +596,8 @@ module "ec2" {
                           }
                           EOF4
 
-                          echo "ABOUT TO CONFIGURE NGINX CONF WITH PUBLIC DNS: $PUBLIC_DNS"
-                          sed -i "s/server_name your-domain.com;/server_name $PUBLIC_DNS;/" /etc/nginx/conf.d/meme-gallery-frontend.conf
+                          # echo "ABOUT TO CONFIGURE NGINX CONF WITH PUBLIC DNS: $PUBLIC_DNS"
+                          # sed -i "s/server_name your-domain.com;/server_name $PUBLIC_DNS;/" /etc/nginx/conf.d/meme-gallery-frontend.conf
                          
                           echo "ABOUT TO TEST NGINX CONFIGS"
                           nginx -t
